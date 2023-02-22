@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-from pathlib import Path
 from time import sleep
 import click
 import ast
 
-from . import __version__, LiveServer
+from liveserver import __version__, LiveServer
 
 
 class PythonList(click.Option):
@@ -28,11 +27,11 @@ def cli(version: bool = False):
 
 @cli.command(name="serve")
 @click.option("-r", "--root", default="", help="path where the server should attach")
-@click.option("-p", "--port", default=8080, help="port to serve to")
+@click.option("-p", "--port", default=3031, help="port to serve to")
 @click.option(
     "-w",
     "--watch",
-    cls=PythonList,
+    multiple=True,
     default=[],
     help="list of paths to watch for changes. This must be in the format of a python list with \
 only strings inside. Ex. ['blog/python/']"

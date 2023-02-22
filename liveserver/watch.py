@@ -83,5 +83,5 @@ class LiveWatchHandler(FileSystemEventHandler):
 
     @debounce(WAIT)
     def on_deleted(self, event):
-        if isinstance(event, FileModifiedEvent):
+        if isinstance(event, FileDeletedEvent):
             self._update(event.src_path)

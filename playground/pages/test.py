@@ -2,7 +2,7 @@ from time import sleep
 
 from liveserver import LiveServer
 
-liveserver = LiveServer(root="pages/")
+liveserver = LiveServer()
 
 try:
     print(f"Serving at http://localhost:{liveserver.port}!")

@@ -1,21 +1,21 @@
 from __future__ import annotations
-import datetime
-import email
+
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-import os
-from pathlib import Path
-import posixpath
-from threading import Thread
-from time import sleep
 from typing import BinaryIO, Callable, Literal
-from re import match
-import io
 import urllib
+import io
+
+from threading import Thread
+from re import match
+from time import sleep
+from pathlib import Path
+import os
 import string
+import posixpath
 
 from watchdog.observers import Observer
-from .watchdog import LiveWatchHandler
+from .watch import LiveWatchHandler
 
 # Reference: https://docs.python.org/3/library/http.server.html
 
@@ -23,7 +23,8 @@ LOCALHOST: tuple[Literal['127.0.0.1', 'localhost']] = ("127.0.0.1", "localhost")
 SERVER_PORT = 3031
 PORT_RANGE = [49200, 65535]
 
-livereload_script = string.Template("""
+livereload_script = string.Template(
+    """
 <script defer>
     var livereload = function() {
         var req = new XMLHttpRequest();
@@ -52,16 +53,22 @@ livereload_script = string.Template("""
     livereload();
     console.warn("[Live Reload] Attached: '/${path}'");
 </script>
-""")
+"""
+)
+
 
 def default(src):
     return True
 
+
 def translate_path(root, src) -> str:
-    return posixpath.normpath(src.lstrip(root)).rstrip("index.html").replace("\\", "/")
+    print(src, posixpath.normpath(src.lstrip(root).lstrip(".")).rstrip("index.html").replace("\\", "/"))
+    return posixpath.normpath(src.lstrip(root).lstrip(".")).rstrip("index.html").replace("\\", "/")
+
 
 class LiveServer:
     """Live reload server."""
+
     def __init__(
         self,
         *watch: str,
@@ -77,13 +84,8 @@ class LiveServer:
         self.cache: dict[str, bool] = {}
 
         self.server = LiveServerThread(
-            self.host,
-            self.port,
-            daemon=True,
-            cache=self.cache,
-            directory=root
+            self.host, self.port, daemon=True, cache=self.cache, directory=root
         )
-
 
         # Setup function that sends the file_path to a callback and ensures
         # that it either returns a bool or defaults to False
@@ -95,21 +97,21 @@ class LiveServer:
 
         # Assign callbacks that handle updating the files and restarting the server
         event_handler = LiveWatchHandler(
-            lambda src:  update_cache(src, cb_create or default),
+            lambda src: update_cache(src, cb_create or default),
             lambda src: update_cache(src, cb_update or default),
-            lambda src: update_cache(src, cb_remove or default)
+            lambda src: update_cache(src, cb_remove or default),
         )
         self.watchdog = Observer()
 
         # Add recursive watch directories to watchdog
         if len(watch) == 0:
-            print(f"Watching {posixpath.normpath(root)}")
+            print(f"Watching path {posixpath.normpath(root)!r}")
             self.watchdog.schedule(event_handler, posixpath.normpath(root), recursive=True)
         else:
-            print(f"Watching paths:")
+            print("Watching paths:")
             for path in watch:
                 path = posixpath.join(root, path)
-                print(f"  - {posixpath.normpath(path)}")
+                print(f"  - {posixpath.normpath(path)!r}")
                 self.watchdog.schedule(event_handler, posixpath.normpath(path), recursive=True)
 
     def run(self):
@@ -131,6 +133,7 @@ class LiveServer:
         self.server.stop()
         self.watchdog.stop()
 
+
 class LiveServerThread(Thread):
     """Thread for the server to allow for serve_forever without interfering with the main thread."""
 
@@ -141,7 +144,7 @@ class LiveServerThread(Thread):
         *args,
         cache: dict[str, bool],
         directory: str = "",
-        **kwargs
+        **kwargs,
     ):
         super(LiveServerThread, self).__init__(*args, **kwargs, kwargs={"cache": cache})
         self.server = Server(cache, directory, host=host, port=port)
@@ -165,26 +168,29 @@ class LiveServerThread(Thread):
         """Status of if the server is stopped or not."""
         return self.server.active()
 
+
 class ServiceHandler(SimpleHTTPRequestHandler):
     """Handler for the Server requests."""
 
-    def __init__(
-        self,
-        request,
-        client_address,
-        server,
-        *,
-        directory: str | None = ""
-    ) -> None:
+    def __init__(self, request, client_address, server, *, directory: str | None = "") -> None:
         super().__init__(request, client_address, server, directory=directory)
 
-    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+    def send_error(
+        self,
+        code: int,
+        message: str | None = None,
+        explain: str | None = None,
+        path: str | None = None
+    ) -> None:
         error_page = Path(self.server.directory).joinpath(f"{code}.html")
         if error_page.is_file():
-            self.send_response(code)
-            self.end_headers()
+            live_reload = livereload_script.substitute(path=path or self.path)
             with open(error_page, "r", encoding="utf-8") as custom_error_file:
-                self.wfile.write(custom_error_file.read().encode("utf-8"))
+                data = custom_error_file.read()
+                self.send_response(code)
+                self.send_header("Content-Length", str(len(live_reload) + len(data)))
+                self.end_headers()
+                self.wfile.write(f"{data}{live_reload}".encode("utf-8"))
             return
         return super().send_error(code, message, explain)
 
@@ -192,7 +198,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
         if "/livereload/" not in self.requestline:
             return super().log_request(code, size)
 
-    def send_head(self, live_reload: str) -> io.BytesIO | BinaryIO | None:
+    def send_head(self, live_reload: str, path: str) -> io.BytesIO | BinaryIO | None:
         path = self.translate_path(self.path)
         f = None
         if os.path.isdir(path):
@@ -200,8 +206,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             if not parts.path.endswith('/'):
                 # redirect browser - doing basically what apache does
                 self.send_response(HTTPStatus.MOVED_PERMANENTLY)
-                new_parts = (parts[0], parts[1], parts[2] + '/',
-                            parts[3], parts[4])
+                new_parts = (parts[0], parts[1], parts[2] + '/', parts[3], parts[4])
                 new_url = urllib.parse.urlunsplit(new_parts)
                 self.send_header("Location", new_url)
                 self.send_header("Content-Length", "0")
@@ -214,14 +219,20 @@ class ServiceHandler(SimpleHTTPRequestHandler):
                     break
             else:
                 return self.list_directory(path)
+        elif path == "":
+            for index in "index.html", "index.htm":
+                if os.path.exists(index):
+                    path = index
+                    break
+
         ctype = self.guess_type(path)
         if path.endswith("/"):
-            self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+            self.send_error(HTTPStatus.NOT_FOUND, "File not found", path)
             return None
         try:
             f = open(path, 'rb')
         except OSError:
-            self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+            self.send_error(HTTPStatus.NOT_FOUND, "File not found", path)
             return None
 
         try:
@@ -233,8 +244,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
                 self.send_header("Content-Length", str(fs[6] + len(live_reload)))
             else:
                 self.send_header("Content-Length", str(fs[6]))
-            self.send_header("Last-Modified",
-                self.date_time_string(fs.st_mtime))
+            self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
             self.end_headers()
             return f
         except:
@@ -256,23 +266,25 @@ class ServiceHandler(SimpleHTTPRequestHandler):
                         code = 1
                     else:
                         code = 0
-            except: pass
+            except:
+                pass
 
             self.wfile.write(bytes(f"{code}", "utf-8"))
         else:
             # Same as super().do_GET() except a live reload script is injected
             self.path = posixpath.join(self.server.directory.strip("/"), self.path.lstrip("/"))
             live_reload = livereload_script.substitute(path=path.lstrip('/'))
-            file = self.send_head(live_reload)
+            file = self.send_head(live_reload, path)
             if file:
                 try:
                     if not Path(self.path).is_file() or self.path.endswith((".html", ".htm")):
-                        data =  f"{file.read().decode()}{live_reload}"
+                        data = f"{file.read().decode()}{live_reload}"
                         self.wfile.write(bytes(data, "utf-8"))
                     else:
                         self.copyfile(file, self.wfile)
                 finally:
                     file.close()
+
 
 class Server(ThreadingHTTPServer):
     """Threaded live reload server."""

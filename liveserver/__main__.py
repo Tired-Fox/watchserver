@@ -3,29 +3,9 @@ from __future__ import annotations
 
 from time import sleep
 import click
-import ast
 
 from liveserver import __version__, LiveServer
 
-
-class PythonList(click.Option):
-
-    def type_cast_value(self, ctx, value):
-        try:
-            return ast.literal_eval(value)
-        except:
-            raise click.BadParameter(value)
-
-@click.group(invoke_without_command=True)
-@click.option("-v", "--version", flag_value=True, help="Version of mophidian", default=False)
-def cli(version: bool = False):
-    '''Pythonic Static Site Generator CLI.'''
-
-    if version:
-        click.echo(f"Livereload v{__version__}")
-        exit()
-
-@cli.command(name="serve")
 @click.option("-r", "--root", default="", help="path where the server should attach")
 @click.option("-p", "--port", default=3031, help="port to serve to")
 @click.option(
@@ -36,11 +16,17 @@ def cli(version: bool = False):
     help="list of paths to watch for changes. This must be in the format of a python list with \
 only strings inside. Ex. ['blog/python/']"
 )
-def serve(root: str, port: int, watch: list[str]):
+@click.option("-v", "--version", flag_value=True, help="Version of mophidian", default=False)
+@click.command(name="serve")
+def serve(root: str="", port: int=3031, watch: list[str]=[], version: bool = False):
     """Serve a specific path or the cwd by default. Watch for updates in files in the paths provided
     or in cwd by default. If changes are found then call the appropriate callback and reload the page
     if the callback returns True.
     """
+
+    if version:
+        click.echo(f"Livereload v{__version__}")
+        exit()
 
     liveserver = LiveServer(*watch, port=port)
     try:
@@ -53,4 +39,4 @@ def serve(root: str, port: int, watch: list[str]):
         liveserver.stop()
 
 if __name__ == "__main__":
-    cli()
+    serve()

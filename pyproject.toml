@@ -29,7 +29,7 @@ dependencies = [
 "Website" = "https://tired-fox.github.io/Mophidian/"
 
 [project.scripts]
-liveserver = "liveserver.__main__:cli"
+liveserver = "liveserver.__main__:serve"
 
 # [project.entry-points.""]
 

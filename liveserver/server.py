@@ -62,7 +62,6 @@ def default(src):
 
 
 def translate_path(root, src) -> str:
-    print(src, posixpath.normpath(src.lstrip(root).lstrip(".")).rstrip("index.html").replace("\\", "/"))
     return posixpath.normpath(src.lstrip(root).lstrip(".")).rstrip("index.html").replace("\\", "/")
 
 
@@ -73,6 +72,7 @@ class LiveServer:
         self,
         *watch: str,
         root: str = "",
+        base: str = "",
         host: str = LOCALHOST[0],
         port: int = SERVER_PORT,
         cb_update: Callable = None,
@@ -84,7 +84,7 @@ class LiveServer:
         self.cache: dict[str, bool] = {}
 
         self.server = LiveServerThread(
-            self.host, self.port, daemon=True, cache=self.cache, directory=root
+            self.host, self.port, daemon=True, cache=self.cache, directory=root, base=base
         )
 
         # Setup function that sends the file_path to a callback and ensures
@@ -144,10 +144,11 @@ class LiveServerThread(Thread):
         *args,
         cache: dict[str, bool],
         directory: str = "",
+        base: str = "",
         **kwargs,
     ):
         super(LiveServerThread, self).__init__(*args, **kwargs, kwargs={"cache": cache})
-        self.server = Server(cache, directory, host=host, port=port)
+        self.server = Server(cache, directory, base, host=host, port=port)
 
     def run(self) -> None:
         self.server.start()
@@ -182,7 +183,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
         explain: str | None = None,
         path: str | None = None
     ) -> None:
-        error_page = Path(self.server.directory).joinpath(f"{code}.html")
+        error_page = Path(self.server.directory).joinpath(self.server.base, f"{code}.html")
         if error_page.is_file():
             live_reload = livereload_script.substitute(path=path or self.path)
             with open(error_page, "r", encoding="utf-8") as custom_error_file:
@@ -293,6 +294,7 @@ class Server(ThreadingHTTPServer):
         self,
         cache: dict[str, bool],
         directory: str,
+        base: str,
         *,
         host: str = "localhost",
         port=PORT_RANGE[0],
@@ -305,6 +307,7 @@ class Server(ThreadingHTTPServer):
         self.full_url = f"http://{host}:{port}/"
         self.cache = cache
         self.directory = directory
+        self.base = base
 
     def serve_forever(self, poll_interval: float = 0.5) -> None:
         self.is_active = True

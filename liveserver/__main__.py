@@ -7,6 +7,12 @@ import click
 from liveserver import __version__, LiveServer
 
 @click.option("-r", "--root", default="", help="path where the server should attach")
+@click.option(
+    "-b",
+    "--base",
+    default="",
+    help="base path where the server will find custom error files."
+)
 @click.option("-p", "--port", default=3031, help="port to serve to")
 @click.option(
     "-w",
@@ -18,7 +24,7 @@ only strings inside. Ex. ['blog/python/']"
 )
 @click.option("-v", "--version", flag_value=True, help="Version of mophidian", default=False)
 @click.command(name="serve")
-def serve(root: str="", port: int=3031, watch: list[str]=[], version: bool = False):
+def serve(root: str="", base: str = "", port: int=3031, watch: list[str]=[], version: bool = False):
     """Serve a specific path or the cwd by default. Watch for updates in files in the paths provided
     or in cwd by default. If changes are found then call the appropriate callback and reload the page
     if the callback returns True.
@@ -28,7 +34,7 @@ def serve(root: str="", port: int=3031, watch: list[str]=[], version: bool = Fal
         click.echo(f"Livereload v{__version__}")
         exit()
 
-    liveserver = LiveServer(*watch, port=port)
+    liveserver = LiveServer(*watch, root=root, base=base, port=port)
     try:
         print(f"Started serving at http://localhost:{port}/")
         liveserver.start()

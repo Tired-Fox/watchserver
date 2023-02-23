@@ -1,10 +1,12 @@
 from inspect import signature
+from re import match
 from threading import Timer
 import time
 from typing import Callable
 
 from watchdog.observers import Observer
 from watchdog.events import *
+from .util import ServerPath
 
 observer = Observer()
 Callbacks = dict[str, dict[str, Callable]]
@@ -62,10 +64,13 @@ class LiveWatchHandler(FileSystemEventHandler):
         create: Callable,
         update: Callable,
         remove: Callable,
+        ignore: list[ServerPath]
     ) -> None:
         self._create = create
         self._update = update
         self._remove = remove
+        self._ignore = ignore
+        super().__init__()
 
     @debounce(WAIT)
     def on_any_event(self, event: FileSystemEvent):
@@ -73,15 +78,25 @@ class LiveWatchHandler(FileSystemEventHandler):
 
     @debounce(WAIT)
     def on_modified(self, event: DirModifiedEvent | FileModifiedEvent):
-        if isinstance(event, FileModifiedEvent):
+        print(event.src_path, self._ignore, [ignore.regex() for ignore in self._ignore], [match(ignore.regex(), event.src_path) is None for ignore in self._ignore])
+        if (
+            isinstance(event, FileModifiedEvent)
+            and all(match(ignore.regex(), event.src_path) is None for ignore in self._ignore)
+        ):
             self._update(event.src_path)
 
     @debounce(WAIT)
     def on_created(self, event):
-        if isinstance(event, FileModifiedEvent):
+        if (
+            isinstance(event, FileCreatedEvent)
+            and all(match(ignore.regex(), event.src_path) is None for ignore in self._ignore)
+        ):
             self._create(event.src_path)
 
     @debounce(WAIT)
     def on_deleted(self, event):
-        if isinstance(event, FileDeletedEvent):
+        if (
+            isinstance(event, FileDeletedEvent)
+            and all(match(ignore.regex(), event.src_path) is None for ignore in self._ignore)
+        ):
             self._update(event.src_path)

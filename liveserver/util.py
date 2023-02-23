@@ -182,12 +182,11 @@ scope of the current path {self.posix()!r}")
         """Replace ** with .* and * with [^/]* in the path."""
         parts = []
         for part in self.path.split("/"):
-            part = part.replace(".", "\\.")
             if part == "**":
                 parts.append(".*")
             else:
                 parts.append(part.replace("*", "[^/]*"))
-        return "\\/".join(parts)
+        return "\/".join(parts)
     
     def strip(self, text: str = "/"):
         """Remove a substring from the start and end of the path."""

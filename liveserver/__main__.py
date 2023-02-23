@@ -47,7 +47,7 @@ def serve(
         root=root,
         base=base,
         port=port,
-        surpress=silent,
+        suppress=silent,
         auto_open=open
     )
 

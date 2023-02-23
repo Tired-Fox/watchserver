@@ -30,7 +30,7 @@ class LiveServerThread(Thread):
         super(LiveServerThread, self).__init__(*args, **kwargs)
         self.server = Server(reloads, directory, base, host=host, port=port)
 
-    def surpress(self):
+    def suppress(self):
         """Surpress all logs from the server."""
         self.server.logging = False
 
@@ -166,11 +166,13 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             self.end_headers()
 
             code = 0
-            while self.server.reloads.qsize() != 0:
-                reload = self.server.reloads.get()
-                if match(f"^{reload.regex()}$", file_path) is not None:
-                    code = 1
-                self.server.reloads.task_done()
+            try:
+                while self.server.reloads.qsize() != 0:
+                    reload = self.server.reloads.get(timeout=5)
+                    if match(f"^{reload.regex()}$", file_path) is not None:
+                        code = 1
+                    self.server.reloads.task_done()
+            except: pass
             self.wfile.write(bytes(f"{code}", "utf-8"))
         else:
             # Same as super().do_GET() except a live reload script is injected

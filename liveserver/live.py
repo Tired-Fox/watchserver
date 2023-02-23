@@ -101,12 +101,13 @@ class LiveServer:
     def __init__(
         self,
         *watch: str,
+        ignore_list: list[str] = None,
         root: str = "",
         base: str = "",
         auto_open: bool = False,
         host: str = LOCALHOST[0],
         port: int = SERVER_PORT,
-        surpress: bool = False,
+        suppress: bool = False,
         live_callback: LiveCallback = LiveCallback()
     ) -> None:
         self.root = root
@@ -119,8 +120,8 @@ class LiveServer:
             self.host, self.port, daemon=True, reloads=self.reloads, directory=root, base=base
         )
 
-        if surpress:
-            self.server_thread.surpress()
+        if suppress:
+            self.server_thread.suppress()
 
         # Setup function that sends the file_path to a callback and ensures
         # that it either returns a bool or defaults to False
@@ -134,26 +135,27 @@ class LiveServer:
             lambda src: update_file(src, live_callback.create),
             lambda src: update_file(src, live_callback.update),
             lambda src: update_file(src, live_callback.remove),
+            [ServerPath(path) for path in ignore_list or []]
         )
         self.watchdog = Observer()
 
         # Add recursive watch directories to watchdog
         if len(watch) == 0:
-            if not surpress:
+            if not suppress:
                 print(f"Watching path {ServerPath(root).posix()!r}")
             self.watchdog.schedule(event_handler, ServerPath(root).platform(), recursive=True)
         else:
-            if not surpress:
+            if not suppress:
                 print("Watching paths:")
             for path in watch:
                 path = ServerPath(root, path).posix()
-                if not surpress:
+                if not suppress:
                     print(f"  - {path.posix()!r}")
                 self.watchdog.schedule(event_handler, path, recursive=True)
 
-    def surpress(self):
+    def suppress(self):
         """Surpress all logs from the server."""
-        self.server_thread.surpress()
+        self.server_thread.suppress()
 
     def logging(self):
         """Enable all logs from the server."""
@@ -172,10 +174,10 @@ class LiveServer:
         """Start the server and file watcher."""
         self.server_thread.start()
         self.watchdog.start()
-        
+
         if self.auto_open:
             webbrowser.open_new_tab(
-                self.server_thread.server.url(LOCALHOST[1]) + f"{ServerPath(self.root).lstrip()}"
+                self.server_thread.server.url(self.host) + f"{ServerPath(self.root).lstrip()}"
             )
 
     def stop(self):

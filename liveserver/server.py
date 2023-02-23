@@ -2,137 +2,17 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-from typing import BinaryIO, Callable, Literal
+from typing import Any, BinaryIO
 import urllib
 import io
 
 from threading import Thread
 from re import match
-from time import sleep
-from pathlib import Path
 import os
-import string
-import posixpath
 
-from watchdog.observers import Observer
-from .watch import LiveWatchHandler
+from .util import ServerPath, PORT_RANGE, livereload_script, translate_path
 
 # Reference: https://docs.python.org/3/library/http.server.html
-
-LOCALHOST: tuple[Literal['127.0.0.1', 'localhost']] = ("127.0.0.1", "localhost")
-SERVER_PORT = 3031
-PORT_RANGE = [49200, 65535]
-
-livereload_script = string.Template(
-    """
-<script defer>
-    var livereload = function() {
-        var req = new XMLHttpRequest();
-        req.onloadend = function() {
-            // File has been changed reload the server
-            if (parseInt(this.responseText) === 1) {
-                location.reload();
-                return;
-            }
-
-            // Queue next livreload request
-            var launchNext = livereload.bind(this);
-            if (this.status === 200) {
-                // If server is still connected make another request
-                launchNext();
-            } else if (this.status !== 0) {
-                // If server is still connected wait 3 seconds
-                setTimeout(launchNext, 3000);
-            } else {
-                console.warn("[Live Reload] Detached: Server is down");
-            }
-        };
-        req.open("GET", '/livereload/${path}');
-        req.send();
-    }
-    livereload();
-    console.warn("[Live Reload] Attached: '/${path}'");
-</script>
-"""
-)
-
-
-def default(src):
-    return True
-
-
-def translate_path(root, src) -> str:
-    return posixpath.normpath(src.lstrip(root).lstrip(".")).rstrip("index.html").replace("\\", "/")
-
-
-class LiveServer:
-    """Live reload server."""
-
-    def __init__(
-        self,
-        *watch: str,
-        root: str = "",
-        base: str = "",
-        host: str = LOCALHOST[0],
-        port: int = SERVER_PORT,
-        cb_update: Callable = None,
-        cb_remove: Callable = None,
-        cb_create: Callable = None,
-    ) -> None:
-        self.host = host
-        self.port = port
-        self.cache: dict[str, bool] = {}
-
-        self.server = LiveServerThread(
-            self.host, self.port, daemon=True, cache=self.cache, directory=root, base=base
-        )
-
-        # Setup function that sends the file_path to a callback and ensures
-        # that it either returns a bool or defaults to False
-        def update_cache(src: str, clbk: Callable | None):
-            path = translate_path(root, src)
-            result = clbk(path)
-            if isinstance(result, bool):
-                self.cache[path] = result
-
-        # Assign callbacks that handle updating the files and restarting the server
-        event_handler = LiveWatchHandler(
-            lambda src: update_cache(src, cb_create or default),
-            lambda src: update_cache(src, cb_update or default),
-            lambda src: update_cache(src, cb_remove or default),
-        )
-        self.watchdog = Observer()
-
-        # Add recursive watch directories to watchdog
-        if len(watch) == 0:
-            print(f"Watching path {posixpath.normpath(root)!r}")
-            self.watchdog.schedule(event_handler, posixpath.normpath(root), recursive=True)
-        else:
-            print("Watching paths:")
-            for path in watch:
-                path = posixpath.join(root, path)
-                print(f"  - {posixpath.normpath(path)!r}")
-                self.watchdog.schedule(event_handler, posixpath.normpath(path), recursive=True)
-
-    def run(self):
-        """Start the server and file watcher. Creates infinite loop that is interuptable."""
-        self.start()
-        try:
-            while True:
-                sleep(1)
-        except KeyboardInterrupt:
-            self.stop()
-
-    def start(self):
-        """Start the server and file watcher."""
-        self.server.start()
-        self.watchdog.start()
-
-    def stop(self):
-        """Stop the server and file watcher."""
-        self.server.stop()
-        self.watchdog.stop()
-
 
 class LiveServerThread(Thread):
     """Thread for the server to allow for serve_forever without interfering with the main thread."""
@@ -142,13 +22,21 @@ class LiveServerThread(Thread):
         host: str = "localhost",
         port=PORT_RANGE[0],
         *args,
-        cache: dict[str, bool],
+        reloads: list[ServerPath],
         directory: str = "",
         base: str = "",
         **kwargs,
     ):
-        super(LiveServerThread, self).__init__(*args, **kwargs, kwargs={"cache": cache})
-        self.server = Server(cache, directory, base, host=host, port=port)
+        super(LiveServerThread, self).__init__(*args, **kwargs)
+        self.server = Server(reloads, directory, base, host=host, port=port)
+
+    def surpress(self):
+        """Surpress all logs from the server."""
+        self.server.logging = False
+
+    def logging(self):
+        """Enable all logs from the server."""
+        self.server.logging = True
 
     def run(self) -> None:
         self.server.start()
@@ -173,9 +61,6 @@ class LiveServerThread(Thread):
 class ServiceHandler(SimpleHTTPRequestHandler):
     """Handler for the Server requests."""
 
-    def __init__(self, request, client_address, server, *, directory: str | None = "") -> None:
-        super().__init__(request, client_address, server, directory=directory)
-
     def send_error(
         self,
         code: int,
@@ -183,48 +68,63 @@ class ServiceHandler(SimpleHTTPRequestHandler):
         explain: str | None = None,
         path: str | None = None
     ) -> None:
-        error_page = Path(self.server.directory).joinpath(self.server.base, f"{code}.html")
-        if error_page.is_file():
+        error_page = ServerPath(self.server.root, self.server.epath, f"{code}.html")
+        if error_page.isfile():
             live_reload = livereload_script.substitute(path=path or self.path)
-            with open(error_page, "r", encoding="utf-8") as custom_error_file:
+            with open(error_page.platform(), "r", encoding="utf-8") as custom_error_file:
                 data = custom_error_file.read()
                 self.send_response(code)
                 self.send_header("Content-Length", str(len(live_reload) + len(data)))
+                self.no_cache_headers()
                 self.end_headers()
                 self.wfile.write(f"{data}{live_reload}".encode("utf-8"))
             return
         return super().send_error(code, message, explain)
 
+    def no_cache_headers(self):
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+
+    def log_error(self, format: str, *args: Any) -> None:
+        if self.server.logging:
+            return super().log_error(format, *args)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        if self.server.logging:
+            return super().log_message(format, *args)
+
+    def log_date_time_string(self) -> str:
+        if self.server.logging:
+            return super().log_date_time_string()
+
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
-        if "/livereload/" not in self.requestline:
+        if "/livereload/" not in self.requestline and self.server.logging:
             return super().log_request(code, size)
 
-    def send_head(self, live_reload: str, path: str) -> io.BytesIO | BinaryIO | None:
+    def send_head(self, live_reload: str) -> io.BytesIO | BinaryIO | None:
         path = self.translate_path(self.path)
         f = None
-        if os.path.isdir(path):
+        if ServerPath(path).isdir():
             parts = urllib.parse.urlsplit(self.path)
             if not parts.path.endswith('/'):
                 # redirect browser - doing basically what apache does
                 self.send_response(HTTPStatus.MOVED_PERMANENTLY)
-                new_parts = (parts[0], parts[1], parts[2] + '/', parts[3], parts[4])
+                new_parts = (parts[0], parts[1], parts[2] + '/',
+                             parts[3], parts[4])
                 new_url = urllib.parse.urlunsplit(new_parts)
                 self.send_header("Location", new_url)
                 self.send_header("Content-Length", "0")
+                self.no_cache_headers()
                 self.end_headers()
                 return None
             for index in "index.html", "index.htm":
-                index = os.path.join(path, index)
-                if os.path.exists(index):
-                    path = index
+                index = ServerPath(path, index)
+                if index.isfile():
+                    path = index.posix()
                     break
             else:
                 return self.list_directory(path)
-        elif path == "":
-            for index in "index.html", "index.htm":
-                if os.path.exists(index):
-                    path = index
-                    break
 
         ctype = self.guess_type(path)
         if path.endswith("/"):
@@ -238,13 +138,13 @@ class ServiceHandler(SimpleHTTPRequestHandler):
 
         try:
             fs = os.fstat(f.fileno())
-
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-type", ctype)
-            if not Path(self.path).is_file() or self.path.endswith((".html", ".htm")):
+            if not ServerPath(self.path).isfile() or self.path.endswith((".html", ".htm")):
                 self.send_header("Content-Length", str(fs[6] + len(live_reload)))
             else:
                 self.send_header("Content-Length", str(fs[6]))
+            self.no_cache_headers()
             self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
             self.end_headers()
             return f
@@ -252,35 +152,36 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             f.close()
             raise
 
+    def lr_script(self) -> str:
+        """Construct the live reload script html element based on the current path."""
+        return livereload_script.substitute(
+            path=translate_path(self.server.root, self.path)
+        )
+
     def do_GET(self) -> None:
-        path = self.translate_path(self.path).replace("\\", "/")
-        live_reload = match(r"/?livereload/(?P<path>.*)", path)
+        live_reload = match(r"/?livereload/(?P<path>.*)", self.path)
         if live_reload is not None:
-            file_path = live_reload.group("path") if live_reload.group("path") != "" else "/"
+            file_path = translate_path(self.server.root, live_reload.group("path"))
             self.send_response(200)
             self.end_headers()
-            code = 0
-            try:
-                if file_path in self.server.cache:
-                    if self.server.cache[file_path]:
-                        self.server.cache[file_path] = False
-                        code = 1
-                    else:
-                        code = 0
-            except:
-                pass
 
+            code = 0
+            while self.server.reloads.qsize() != 0:
+                reload = self.server.reloads.get()
+                if match(f"^{reload.regex()}$", file_path) is not None:
+                    code = 1
+                self.server.reloads.task_done()
             self.wfile.write(bytes(f"{code}", "utf-8"))
         else:
             # Same as super().do_GET() except a live reload script is injected
-            self.path = posixpath.join(self.server.directory.strip("/"), self.path.lstrip("/"))
-            live_reload = livereload_script.substitute(path=path.lstrip('/'))
-            file = self.send_head(live_reload, path)
+            self.path = ServerPath(self.server.root, self.path).posix()
+            live_reload = self.lr_script()
+            file = self.send_head(live_reload)
             if file:
                 try:
-                    if not Path(self.path).is_file() or self.path.endswith((".html", ".htm")):
-                        data = f"{file.read().decode()}{live_reload}"
-                        self.wfile.write(bytes(data, "utf-8"))
+                    if not ServerPath(self.path).isfile() or self.path.endswith((".html", ".htm")):
+                        data = file.read() + bytes(live_reload, "utf-8")
+                        self.wfile.write(data)
                     else:
                         self.copyfile(file, self.wfile)
                 finally:
@@ -292,8 +193,8 @@ class Server(ThreadingHTTPServer):
 
     def __init__(
         self,
-        cache: dict[str, bool],
-        directory: str,
+        reloads: list[ServerPath],
+        root: str,
         base: str,
         *,
         host: str = "localhost",
@@ -305,9 +206,10 @@ class Server(ThreadingHTTPServer):
         self.port = port
         self.is_active = False
         self.full_url = f"http://{host}:{port}/"
-        self.cache = cache
-        self.directory = directory
-        self.base = base
+        self.reloads = reloads
+        self.root = root
+        self.epath = base
+        self.logging = True
 
     def serve_forever(self, poll_interval: float = 0.5) -> None:
         self.is_active = True

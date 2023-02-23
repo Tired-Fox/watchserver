@@ -78,7 +78,6 @@ class LiveWatchHandler(FileSystemEventHandler):
 
     @debounce(WAIT)
     def on_modified(self, event: DirModifiedEvent | FileModifiedEvent):
-        print(event.src_path, self._ignore, [ignore.regex() for ignore in self._ignore], [match(ignore.regex(), event.src_path) is None for ignore in self._ignore])
         if (
             isinstance(event, FileModifiedEvent)
             and all(match(ignore.regex(), event.src_path) is None for ignore in self._ignore)

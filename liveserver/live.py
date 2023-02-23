@@ -135,7 +135,7 @@ class LiveServer:
             lambda src: update_file(src, live_callback.create),
             lambda src: update_file(src, live_callback.update),
             lambda src: update_file(src, live_callback.remove),
-            [ServerPath(path) for path in ignore_list or []]
+            [ServerPath(path) for path in ignore_list or []],
         )
         self.watchdog = Observer()
 

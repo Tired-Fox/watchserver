@@ -3,6 +3,7 @@ from __future__ import annotations
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from typing import Any, BinaryIO
+from queue import Queue
 import urllib
 import io
 
@@ -22,7 +23,7 @@ class LiveServerThread(Thread):
         host: str = "localhost",
         port=PORT_RANGE[0],
         *args,
-        reloads: list[ServerPath],
+        reloads: Queue[ServerPath],
         directory: str = "",
         base: str = "",
         **kwargs,
@@ -93,10 +94,6 @@ class ServiceHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         if self.server.logging:
             return super().log_message(format, *args)
-
-    def log_date_time_string(self) -> str:
-        if self.server.logging:
-            return super().log_date_time_string()
 
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
         if "/livereload/" not in self.requestline and self.server.logging:
@@ -195,7 +192,7 @@ class Server(ThreadingHTTPServer):
 
     def __init__(
         self,
-        reloads: list[ServerPath],
+        reloads: Queue[ServerPath],
         root: str,
         base: str,
         *,

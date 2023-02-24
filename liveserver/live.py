@@ -9,22 +9,22 @@ from queue import Queue
 
 from watchdog.observers import Observer
 
-__all__ = [
-    "LiveCallback",
-    "LiveServer"
-]
+__all__ = ["LiveCallback", "LiveServer"]
+
 
 class LiveCallback:
-    """Live reloading callbacks for when files are created, updated, or removed.
-    
-    Inherit from this class and override the three methods, `create`, `update`, and `remove`
-    as you need to. If you wish to trigger logic on every call you can do that then call
-    the super classes method.
+    """Live reloading callbacks for when files are created, updated, or
+    removed.
 
-    This base class uses great default returns that live reload based on files paths and when
-    static files, `css` and `js`, are modified. The default method will parse the url, cache key,
-    based on the files path. Static file changes are also applied to the cache key of every page
-    that has already been visited, If you need different functionality make sure to override the
+    Inherit from this class and override the three methods, `create`, `update`,
+    and `remove` as you need to. If you wish to trigger logic on every call you
+    can do that then call the super classes method.
+
+    This base class uses great default returns that live reload based on files
+    paths and when static files, `css` and `js`, are modified. The defaults
+    method will parse the url, cache key, based on the files path. Static files
+    changes are also applied to the cache key of every page that has already
+    been visited, If you need different functionality make sure to override the
     default.
     """
 
@@ -34,16 +34,18 @@ class LiveCallback:
         Args:
             root (str): Path to where the server is serving from the cwd.
             file (str): Path to the file that was created from the cwd.
-        
+
         Returns:
-            tuple[bool, str|None, str|None]: Boolean of whether the page should be live reloaded
-                and a str of the files url. These two are used in the server cache which then live
-                reloads the page. Finally the last str is a file matching pattern. This matches the
-                keys in the cache and marks them as needing a live reload. This is most usefull for
-                when static files are updated and you want the current page to update. '**' will
-                make sure that any page is updated. Otherwise the specific glob pattern is used. For
-                either string value return `''` or `None` to not live reload for that key or for a
-                pattern.
+            tuple[bool, str|None, str|None]: Boolean of whether the page should
+                be live reloaded and a str of the files url. These two are used
+                in the server cache which then live reloads the page. Finally
+                the last str is a file matching pattern. This matches the
+                keys in the cache and marks them as needing a live reload.
+                This is most usefull for when static files are updated and you
+                want the current page to update. '**' will make sure that any
+                page is updated. Otherwise the specific glob pattern is used.
+                For either string value return `''` or `None` to not live
+                reload for that key or for a pattern.
         """
         return default(root, file)
 
@@ -53,16 +55,18 @@ class LiveCallback:
         Args:
             root (str): Path to where the server is serving from the cwd.
             file (str): Path to the file that was updated from the cwd.
-        
+
         Returns:
-            tuple[bool, str|None, str|None]: Boolean of whether the page should be live reloaded
-                and a str of the files url. These two are used in the server cache which then live
-                reloads the page. Finally the last str is a file matching pattern. This matches the
-                keys in the cache and marks them as needing a live reload. This is most usefull for
-                when static files are updated and you want the current page to update. '**' will
-                make sure that any page is updated. Otherwise the specific glob pattern is used. For
-                either string value return `''` or `None` to not live reload for that key or for a
-                pattern.
+            tuple[bool, str|None, str|None]: Boolean of whether the page should
+                be live reloaded and a str of the files url. These two are used
+                in the server cache which then live reloads the page. Finally
+                the last str is a file matching pattern. This matches the keys
+                in the cache and marks them as needing a live reload. This is
+                most usefull for when static files are updated and you want the
+                current page to update. '**' will make sure that any page is
+                updated. Otherwise the specific glob pattern is used. For
+                either string value return `''` or `None` to not live reload
+                for that key or for a pattern.
         """
         return default(root, file)
 
@@ -72,43 +76,49 @@ class LiveCallback:
         Args:
             root (str): Path to where the server is serving from the cwd.
             file (str): Path to the file that was removed from the cwd.
-        
+
         Returns:
-            tuple[bool, str|None, str|None]: Boolean of whether the page should be live reloaded
-                and a str of the files url. These two are used in the server cache which then live
-                reloads the page. Finally the last str is a file matching pattern. This matches the
-                keys in the cache and marks them as needing a live reload. This is most usefull for
-                when static files are updated and you want the current page to update. '**' will
-                make sure that any page is updated. Otherwise the specific glob pattern is used. For
-                either string value return `''` or `None` to not live reload for that key or for a
-                pattern.
+            tuple[bool, str|None, str|None]: Boolean of whether the page should
+                be live reloaded and a str of the files url. These two are used
+                in the server cache which then live reloads the page. Finally
+                the last str is a file matching pattern. This matches the keys
+                in the cache and marks them as needing a live reload. This is
+                most usefull for when static files are updated and you want the
+                current page to update. '**' will make sure that any page is
+                updated. Otherwise the specific glob pattern is used. For
+                either string value return `''` or `None` to not live reload
+                for that key or for a pattern.
         """
         return default(root, file)
 
+
 class LiveServer:
-    """Live reload server. Contains a threaded server, a watchdog observer instance, and a Queue.
-    
-    The watchdog observer watches the patch paths and calls create, update, and remove callbacks for
-    the respective file events. These callbacks can in turn return a list of paths/urls that are
-    added to the queue. When a live reload request is sent the server pops all paths from the queue
-    and checks to see if the request path matches the path. If so a reload response is sent.
-    Otherwise a no-reload response is sent.
-    
-    The server also checks the base path for custom error files matching the error code. If a 404
-    error is sent then the server will look for a `404.html` file in the base path.
+    """Live reload server. Contains a threaded server, a watchdog observer
+    instance, and a Queue.
+
+    The watchdog observer watches the patch paths and calls create, update, and
+    remove callbacks for the respective file events. These callbacks can in
+    turn return a list of paths/urls that are added to the queue. When a live
+    reload request is sent the server pops all paths from the queue and checks
+    to see if the request path matches the path. If so a reload response is
+    sent. Otherwise a no-reload response is sent.
+
+    The server also checks the base path for custom error files matching the
+    error code. If a 404 error is sent then the server will look for a
+    `404.html` file in the base path.
     """
 
     def __init__(
         self,
         *watch: str,
-        ignore_list: list[str] = None,
+        ignore_list: list[str] | None = None,
         root: str = "",
         base: str = "",
         auto_open: bool = False,
         host: str = LOCALHOST[0],
         port: int = SERVER_PORT,
         suppress: bool = False,
-        live_callback: LiveCallback = LiveCallback()
+        live_callback: LiveCallback = LiveCallback(),
     ) -> None:
         self.root = root
         self.host = host
@@ -120,12 +130,13 @@ class LiveServer:
             self.host, self.port, daemon=True, reloads=self.reloads, directory=root, base=base
         )
 
+        print(ignore_list)
         if suppress:
             self.server_thread.suppress()
 
         # Setup function that sends the file_path to a callback and ensures
         # that it either returns a bool or defaults to False
-        def update_file(src: str, clbk: Callable | None):
+        def update_file(src: str, clbk: Callable):
             paths = clbk(root, src)
             for path in paths or []:
                 self.reloads.put(ServerPath(path))
@@ -150,7 +161,7 @@ class LiveServer:
             for path in watch:
                 path = ServerPath(root, path).posix()
                 if not suppress:
-                    print(f"  - {path.posix()!r}")
+                    print(f"  - {path!r}")
                 self.watchdog.schedule(event_handler, path, recursive=True)
 
     def suppress(self):
@@ -182,6 +193,9 @@ class LiveServer:
 
     def stop(self):
         """Stop the server and file watcher."""
+        print('shutting down server')
         self.server_thread.stop()
+        print('shutting down watchdog')
         self.watchdog.stop()
+        print('calling join in Queue')
         self.reloads.join()

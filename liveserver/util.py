@@ -160,7 +160,7 @@ class ServerPath:
             self.path = name + suffix + trail
         return self
 
-    def relative_to(self, rel_path: str|ServerPath) -> ServerPath:
+    def relative_to(self, rel_path: str) -> ServerPath:
         """Calculate the path to the relative path assuming that the current paths root is the
         current directory.
         """
@@ -186,7 +186,7 @@ scope of the current path {self.posix()!r}")
                 parts.append(".*")
             else:
                 parts.append(part.replace("*", "[^/]*"))
-        return "\/".join(parts)
+        return "/".join(parts)
     
     def strip(self, text: str = "/"):
         """Remove a substring from the start and end of the path."""

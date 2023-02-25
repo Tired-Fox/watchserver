@@ -13,27 +13,31 @@ HELP = {
     "watch": "list of paths to watch. Repeat the command for each entry to the list",
     "version": "Version of mophidian",
     "silent": "Surpress all logs from the server and file watcher",
-    "open": "Toggle on auto open. This will automatically open the base url in the browser."
+    "open": "Toggle on auto open. This will automatically open the base url in the browser.",
+    "ignore": "list of ignore patterns to apply to file watcher. Repeat command for each entry",
 }
+
 
 @click.option("-r", "--root", default="", help=HELP["root"])
 @click.option("-b", "--base", default="", help=HELP["base"])
 @click.option("-p", "--port", default=3031, help=HELP["serve"])
 @click.option("-w", "--watch", multiple=True, default=[], help=HELP["watch"])
+@click.option("-i", "--ignore", multiple=True, default=[], help=HELP["ignore"])
 @click.option("-v", "--version", flag_value=True, default=False, help=HELP["version"])
 @click.option("-o", "--open", flag_value=True, default=False, help=HELP["open"])
 @click.option("-s", "--silent", flag_value=True, default=False, help=HELP["silent"])
 @click.command(name="serve")
 def serve(
-    root: str="",
+    root: str = "",
     base: str = "",
-    port: int=3031,
-    watch: list[str]=[],
+    port: int = 3031,
+    watch: list[str] = [],
+    ignore: list[str] = [],
     version: bool = False,
     silent: bool = False,
     open: bool = False,
 ):
-    """ Serve a specific path or the cwd by default. Watch for updates in files in the paths
+    """Serve a specific path or the cwd by default. Watch for updates in files in the paths
     provided or in cwd by default. If changes are found then call the appropriate callback and
     reload the page if the callback returns True.
     """
@@ -43,12 +47,7 @@ def serve(
         exit()
 
     liveserver = LiveServer(
-        *watch,
-        root=root,
-        base=base,
-        port=port,
-        suppress=silent,
-        auto_open=open
+        *watch, ignore_list=ignore, root=root, base=base, port=port, suppress=silent, auto_open=open
     )
 
     try:
@@ -59,6 +58,7 @@ def serve(
     except KeyboardInterrupt:
         print("Shutting down...")
         liveserver.stop()
+
 
 if __name__ == "__main__":
     serve()

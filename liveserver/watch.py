@@ -11,6 +11,7 @@ from .util import ServerPath
 observer = Observer()
 Callbacks = dict[str, dict[str, Callable]]
 
+
 def debounce(wait):
     """Debounce or limit the calls to a function."""
 
@@ -54,17 +55,15 @@ def debounce(wait):
 
     return decorator
 
+
 WAIT = 0.1
+
 
 class LiveWatchHandler(FileSystemEventHandler):
     """Handler for live reload Watchdog."""
 
     def __init__(
-        self,
-        create: Callable,
-        update: Callable,
-        remove: Callable,
-        ignore: list[ServerPath]
+        self, create: Callable, update: Callable, remove: Callable, ignore: list[ServerPath]
     ) -> None:
         self._create = create
         self._update = update
@@ -78,24 +77,24 @@ class LiveWatchHandler(FileSystemEventHandler):
 
     @debounce(WAIT)
     def on_modified(self, event: DirModifiedEvent | FileModifiedEvent):
-        if (
-            isinstance(event, FileModifiedEvent)
-            and all(match(ignore.regex(), event.src_path) is None for ignore in self._ignore)
+        src_path = ServerPath(event.src_path).posix()
+        if isinstance(event, FileModifiedEvent) and all(
+            match(ignore.regex(), src_path) is None for ignore in self._ignore
         ):
-            self._update(event.src_path)
+            self._update(src_path)
 
     @debounce(WAIT)
     def on_created(self, event):
-        if (
-            isinstance(event, FileCreatedEvent)
-            and all(match(ignore.regex(), event.src_path) is None for ignore in self._ignore)
+        src_path = ServerPath(event.src_path).posix()
+        if isinstance(event, FileModifiedEvent) and all(
+            match(ignore.regex(), src_path) is None for ignore in self._ignore
         ):
-            self._create(event.src_path)
+            self._create(src_path)
 
     @debounce(WAIT)
     def on_deleted(self, event):
-        if (
-            isinstance(event, FileDeletedEvent)
-            and all(match(ignore.regex(), event.src_path) is None for ignore in self._ignore)
+        src_path = ServerPath(event.src_path).posix()
+        if isinstance(event, FileModifiedEvent) and all(
+            match(ignore.regex(), src_path) is None for ignore in self._ignore
         ):
-            self._update(event.src_path)
+            self._update(src_path)

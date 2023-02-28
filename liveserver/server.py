@@ -15,8 +15,11 @@ from .util import ServerPath, PORT_RANGE, livereload_script, translate_path
 
 # Reference: https://docs.python.org/3/library/http.server.html
 
+
 class LiveServerThread(Thread):
-    """Thread for the server to allow for serve_forever without interfering with the main thread."""
+    """Thread for the server to allow for serve_forever without interfering with the
+    main thread.
+    """
 
     def __init__(
         self,
@@ -67,7 +70,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
         code: int,
         message: str | None = None,
         explain: str | None = None,
-        path: str | None = None
+        path: str | None = None,
     ) -> None:
         error_page = ServerPath(self.server.root, self.server.epath, f"{code}.html")
         if error_page.isfile():
@@ -107,8 +110,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             if not parts.path.endswith('/'):
                 # redirect browser - doing basically what apache does
                 self.send_response(HTTPStatus.MOVED_PERMANENTLY)
-                new_parts = (parts[0], parts[1], parts[2] + '/',
-                             parts[3], parts[4])
+                new_parts = (parts[0], parts[1], parts[2] + '/', parts[3], parts[4])
                 new_url = urllib.parse.urlunsplit(new_parts)
                 self.send_header("Location", new_url)
                 self.send_header("Content-Length", "0")
@@ -151,9 +153,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
 
     def lr_script(self) -> str:
         """Construct the live reload script html element based on the current path."""
-        return livereload_script.substitute(
-            path=translate_path(self.server.root, self.path)
-        )
+        return livereload_script.substitute(path=translate_path(self.server.root, self.path))
 
     def do_GET(self) -> None:
         live_reload = match(r"/?livereload/(?P<path>.*)", self.path)
@@ -169,7 +169,8 @@ class ServiceHandler(SimpleHTTPRequestHandler):
                     if match(f"^{reload.regex()}$", file_path) is not None:
                         code = 1
                     self.server.reloads.task_done()
-            except: pass
+            except Exception:
+                pass
             self.wfile.write(bytes(f"{code}", "utf-8"))
         else:
             # Same as super().do_GET() except a live reload script is injected

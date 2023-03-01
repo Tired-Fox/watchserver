@@ -2,7 +2,11 @@ from time import sleep
 
 from watchserver import LiveServer
 
-liveserver = LiveServer(base="pages/", ignore_list=["**/pages/blog/*"])
+liveserver = LiveServer(
+    base="pages/",
+    ignore_list=["**/pages/blog/*"],
+    auto_open="pages/"
+)
 
 try:
     print(f"Serving at http://localhost:{liveserver.port}!")

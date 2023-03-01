@@ -200,7 +200,6 @@ class LiveServer:
         if self.auto_open:
             webbrowser.open_new_tab(
                 self.server_thread.server.url(self.host)
-                + f"{ServerPath(self.root).lstrip()}"
             )
 
     def stop(self):

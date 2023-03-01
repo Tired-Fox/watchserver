@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "liveserver"
-version = "0.1.0"
+name = "watchserver"
+version = "0.1.2"
 description = "Python live reload server"
 readme = "README.md"
 license = "MIT"
@@ -25,8 +25,8 @@ dependencies = [
 [project.optional-dependencies]
 
 [project.urls]
-"Homepage" = "https://github.com/Tired-Fox/Mophidian"
-"Website" = "https://tired-fox.github.io/Mophidian/"
+"Homepage" = "https://github.com/Tired-Fox/watchserver"
+"Website" = "https://tired-fox.github.io/watchserver/"
 
 [project.scripts]
 liveserver = "liveserver.__main__:serve"

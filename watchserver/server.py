@@ -11,7 +11,7 @@ from threading import Thread
 from re import match
 import os
 
-from .util import ServerPath, PORT_RANGE, livereload_script, translate_path
+from .util import ServerPath, PORT_RANGE, livereload_script, translate_path, LOCALHOST
 
 # Reference: https://docs.python.org/3/library/http.server.html
 
@@ -224,9 +224,9 @@ class Server(ThreadingHTTPServer):
         """Whether the server is up and active."""
         return self.is_active
 
-    def url(self, host: str) -> str:
+    def url(self, host: str | None = None) -> str:
         """Get the base url of the server."""
-        return f"http://{host}:{self.server_port}/"
+        return f"http://{host or LOCALHOST[1]}:{self.server_port}/"
 
     def start(self):
         """Start the server."""

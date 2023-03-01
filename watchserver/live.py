@@ -110,7 +110,7 @@ class LiveServer:
 
     def __init__(
         self,
-        *watch: str,
+        watch: list[str],
         ignore_list: list[str] | None = None,
         root: str = "",
         base: str = "",
@@ -127,10 +127,14 @@ class LiveServer:
         self.reloads: Queue = Queue()
 
         self.server_thread = LiveServerThread(
-            self.host, self.port, daemon=True, reloads=self.reloads, directory=root, base=base
+            self.host,
+            self.port,
+            daemon=True,
+            reloads=self.reloads,
+            directory=root,
+            base=base
         )
 
-        print(ignore_list)
         if suppress:
             self.server_thread.suppress()
 
@@ -154,15 +158,20 @@ class LiveServer:
         if len(watch) == 0:
             if not suppress:
                 print(f"Watching path {ServerPath(root).posix()!r}")
-            self.watchdog.schedule(event_handler, ServerPath(root).platform(), recursive=True)
+            self.watchdog.schedule(
+                event_handler,
+                ServerPath(root).platform(),
+                recursive=True
+            )
         else:
             if not suppress:
                 print("Watching paths:")
             for path in watch:
-                path = ServerPath(root, path).posix()
-                if not suppress:
-                    print(f"  - {path!r}")
-                self.watchdog.schedule(event_handler, path, recursive=True)
+                path = ServerPath(path)
+                if path.exists():
+                    if not suppress:
+                        print(f"  - {path!r}")
+                    self.watchdog.schedule(event_handler, path.posix(), recursive=True)
 
     def suppress(self):
         """Surpress all logs from the server."""
@@ -173,7 +182,9 @@ class LiveServer:
         self.server_thread.logging()
 
     def run(self):
-        """Start the server and file watcher. Creates infinite loop that is interuptable."""
+        """Start the server and file watcher. Creates infinite loop that is
+        interuptable.
+        """
         self.start()
         try:
             while True:
@@ -188,7 +199,8 @@ class LiveServer:
 
         if self.auto_open:
             webbrowser.open_new_tab(
-                self.server_thread.server.url(self.host) + f"{ServerPath(self.root).lstrip()}"
+                self.server_thread.server.url(self.host)
+                + f"{ServerPath(self.root).lstrip()}"
             )
 
     def stop(self):

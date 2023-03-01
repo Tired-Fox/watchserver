@@ -4,7 +4,7 @@ from __future__ import annotations
 from time import sleep
 import click
 
-from liveserver import __version__, LiveServer
+from watchserver import __version__, LiveServer
 
 HELP = {
     "root": "path where the server should attach",

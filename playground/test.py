@@ -1,6 +1,6 @@
 from time import sleep
 
-from liveserver import LiveServer
+from watchserver import LiveServer
 
 liveserver = LiveServer(base="pages/", ignore_list=["**/pages/blog/*"])
 

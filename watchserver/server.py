@@ -102,11 +102,11 @@ class ServiceHandler(SimpleHTTPRequestHandler):
         if "/livereload/" not in self.requestline and self.server.logging:
             return super().log_request(code, size)
 
-    def send_head(self, live_reload: str) -> io.BytesIO | BinaryIO | None:
+    def send_head(self, live_reload: str, request_path: str) -> io.BytesIO | BinaryIO | None:
         path = self.translate_path(self.path)
         f = None
         if ServerPath(path).isdir():
-            parts = urllib.parse.urlsplit(self.path)
+            parts = urllib.parse.urlsplit(request_path)
             if not parts.path.endswith('/'):
                 # redirect browser - doing basically what apache does
                 self.send_response(HTTPStatus.MOVED_PERMANENTLY)
@@ -174,9 +174,10 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             self.wfile.write(bytes(f"{code}", "utf-8"))
         else:
             # Same as super().do_GET() except a live reload script is injected
+            request_path = str(self.path)
             self.path = ServerPath(self.server.root, self.path).posix()
             live_reload = self.lr_script()
-            file = self.send_head(live_reload)
+            file = self.send_head(live_reload, request_path)
             if file:
                 try:
                     if not ServerPath(self.path).isfile() or self.path.endswith((".html", ".htm")):

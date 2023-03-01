@@ -210,9 +210,5 @@ class LiveServer:
 
     def stop(self):
         """Stop the server and file watcher."""
-        print('shutting down server')
         self.server_thread.stop()
-        print('shutting down watchdog')
         self.watchdog.stop()
-        print('calling join in Queue')
-        self.reloads.join()

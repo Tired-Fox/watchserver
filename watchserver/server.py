@@ -65,6 +65,14 @@ class LiveServerThread(Thread):
 class ServiceHandler(SimpleHTTPRequestHandler):
     """Handler for the Server requests."""
 
+    extensions_map = _encodings_map_default = {
+        '.gz': 'application/gzip',
+        '.Z': 'application/octet-stream',
+        '.bz2': 'application/x-bzip2',
+        '.xz': 'application/x-xz',
+        '.js': 'application/javascript',
+    }
+
     def send_error(
         self,
         code: int,
@@ -126,7 +134,10 @@ class ServiceHandler(SimpleHTTPRequestHandler):
                 return self.list_directory(path)
 
         ctype = self.guess_type(path)
-        if path.endswith("/"):
+        if ServerPath(path).with_suffix(".js").isfile():
+            ctype = "application/javascript"
+            path = ServerPath(path).with_suffix(".js").posix()
+        elif path.endswith("/"):
             self.send_error(HTTPStatus.NOT_FOUND, "File not found", path)
             return None
         try:
@@ -139,7 +150,8 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             fs = os.fstat(f.fileno())
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-type", ctype)
-            if not ServerPath(self.path).isfile() or self.path.endswith((".html", ".htm")):
+            print(not ServerPath(self.path).isfile() or self.path.endswith((".html", ".htm")), self.path)
+            if self.path.endswith((".html", ".htm")):
                 self.send_header("Content-Length", str(fs[6] + len(live_reload)))
             else:
                 self.send_header("Content-Length", str(fs[6]))
@@ -186,7 +198,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
                     else:
                         self.copyfile(file, self.wfile)
                 finally:
-                    file.close()
+                   file.close()
 
 
 class Server(ThreadingHTTPServer):

@@ -47,7 +47,13 @@ def serve(
         exit()
 
     liveserver = LiveServer(
-        *watch, ignore_list=ignore, root=root, base=base, port=port, suppress=silent, auto_open=open
+        watch,
+        ignore_list=ignore,
+        root=root,
+        base=base,
+        port=port,
+        suppress=silent,
+        auto_open="" if open else None
     )
 
     try:

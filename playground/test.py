@@ -5,7 +5,7 @@ from watchserver import LiveServer
 liveserver = LiveServer(
     base="pages/",
     ignore_list=["**/pages/blog/*"],
-    auto_open="pages/"
+    auto_open=None #"pages/"
 )
 
 try:

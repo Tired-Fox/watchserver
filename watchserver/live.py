@@ -125,6 +125,7 @@ class LiveServer:
         self.port = port
         self.auto_open = auto_open
         self.reloads: Queue = Queue()
+        watch = watch or ['.']
 
         self.server_thread = LiveServerThread(
             self.host,

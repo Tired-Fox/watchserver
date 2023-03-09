@@ -150,8 +150,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             fs = os.fstat(f.fileno())
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-type", ctype)
-            print(not ServerPath(self.path).isfile() or self.path.endswith((".html", ".htm")), self.path)
-            if self.path.endswith((".html", ".htm")):
+            if self.path.endswith((".html", ".htm")) or not ServerPath(self.path).lstrip().isfile():
                 self.send_header("Content-Length", str(fs[6] + len(live_reload)))
             else:
                 self.send_header("Content-Length", str(fs[6]))
@@ -191,8 +190,8 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             live_reload = self.lr_script()
             file = self.send_head(live_reload, request_path)
             if file:
-                try:
-                    if not ServerPath(self.path).isfile() or self.path.endswith((".html", ".htm")):
+                try: 
+                    if self.path.endswith((".html", ".htm")) or not ServerPath(self.path).lstrip().isfile():
                         data = file.read() + bytes(live_reload, "utf-8")
                         self.wfile.write(data)
                     else:

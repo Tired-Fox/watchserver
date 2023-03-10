@@ -76,7 +76,7 @@ class LiveWatchHandler(FileSystemEventHandler):
         pass
 
     @debounce(WAIT)
-    def on_modified(self, event: DirModifiedEvent | FileModifiedEvent):
+    def on_modified(self, event):
         src_path = ServerPath(event.src_path).posix()
         if isinstance(event, FileModifiedEvent) and all(
             match(ignore.regex(), src_path) is None for ignore in self._ignore
@@ -86,7 +86,7 @@ class LiveWatchHandler(FileSystemEventHandler):
     @debounce(WAIT)
     def on_created(self, event):
         src_path = ServerPath(event.src_path).posix()
-        if isinstance(event, FileModifiedEvent) and all(
+        if isinstance(event, FileCreatedEvent) and all(
             match(ignore.regex(), src_path) is None for ignore in self._ignore
         ):
             self._create(src_path)
@@ -94,7 +94,7 @@ class LiveWatchHandler(FileSystemEventHandler):
     @debounce(WAIT)
     def on_deleted(self, event):
         src_path = ServerPath(event.src_path).posix()
-        if isinstance(event, FileModifiedEvent) and all(
+        if isinstance(event, FileDeletedEvent) and all(
             match(ignore.regex(), src_path) is None for ignore in self._ignore
         ):
-            self._update(src_path)
+            self._remove(src_path)

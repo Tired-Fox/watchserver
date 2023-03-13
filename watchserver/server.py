@@ -100,7 +100,8 @@ class ServiceHandler(SimpleHTTPRequestHandler):
 
     def log_error(self, format: str, *args: Any) -> None:
         if self.server.logging:
-            return super().log_error(format, *args)
+            print("\x1b[1m[\x1b[31mERROR\x1b[39m]\x1b[0m", " ".join(args))
+            # return super().log_error(format, *args)
 
     def log_message(self, format: str, *args: Any) -> None:
         if self.server.logging:

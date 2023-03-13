@@ -113,7 +113,7 @@ class LiveServer:
         watch: list[str] | None = None,
         ignore_list: list[str] | None = None,
         root: str = "",
-        base: str = "",
+        errors: str = "",
         auto_open: str|None = None,
         host: str = LOCALHOST[0],
         port: int = SERVER_PORT,
@@ -133,7 +133,7 @@ class LiveServer:
             daemon=True,
             reloads=self.reloads,
             directory=root,
-            base=base
+            errors=errors
         )
 
         if suppress:
@@ -159,7 +159,7 @@ class LiveServer:
         if watch is not None:
             if len(watch) == 0:
                 if not suppress:
-                    print(f"Watching path {ServerPath(root).posix()!r}")
+                    print(f"Watching path {ServerPath(root).posix()!r}\n")
                 self.watchdog.schedule(
                     event_handler,
                     ServerPath(root).platform(),
@@ -178,6 +178,7 @@ class LiveServer:
                             path.posix(),
                             recursive=True
                         )
+                print()
 
     def suppress(self):
         """Surpress all logs from the server."""

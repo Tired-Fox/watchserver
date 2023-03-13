@@ -8,18 +8,18 @@ from watchserver import __version__, LiveServer
 
 HELP = {
     "root": "path where the server should attach",
-    "base": "base path where the server will find custom error files.",
+    "errors": "path where the server will find custom error files (ex. 404.html).",
     "serve": "port that the server will serve to",
     "watch": "list of paths to watch. Repeat the command for each entry to the list",
     "version": "Version of mophidian",
     "silent": "Surpress all logs from the server and file watcher",
-    "open": "Toggle on auto open. This will automatically open the base url in the browser.",
+    "open": "Toggle on auto open in browser.",
     "ignore": "list of ignore patterns to apply to file watcher. Repeat command for each entry",
 }
 
 
 @click.option("-r", "--root", default="", help=HELP["root"])
-@click.option("-b", "--base", default="", help=HELP["base"])
+@click.option("-e", "--errors", default="", help=HELP["errors"])
 @click.option("-p", "--port", default=3031, help=HELP["serve"])
 @click.option("-w", "--watch", multiple=True, default=[], help=HELP["watch"])
 @click.option("-i", "--ignore", multiple=True, default=[], help=HELP["ignore"])
@@ -29,7 +29,7 @@ HELP = {
 @click.command(name="serve")
 def serve(
     root: str = "",
-    base: str = "",
+    errors: str = "",
     port: int = 3031,
     watch: list[str] = [],
     ignore: list[str] = [],
@@ -50,7 +50,7 @@ def serve(
         watch,
         ignore_list=ignore,
         root=root,
-        base=base,
+        errors=errors,
         port=port,
         suppress=silent,
         auto_open="" if open else None

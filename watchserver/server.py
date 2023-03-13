@@ -4,8 +4,11 @@ from http import HTTPStatus
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from typing import Any, BinaryIO
 from queue import Queue
+from traceback import print_exc
 import urllib
+import time
 import io
+import sys
 
 from threading import Thread
 from re import match
@@ -28,11 +31,11 @@ class LiveServerThread(Thread):
         *args,
         reloads: Queue[ServerPath],
         directory: str = "",
-        base: str = "",
+        errors: str = "",
         **kwargs,
     ):
         super(LiveServerThread, self).__init__(*args, **kwargs)
-        self.server = Server(reloads, directory, base, host=host, port=port)
+        self.server = Server(reloads, directory, errors, host=host, port=port)
 
     def suppress(self):
         """Surpress all logs from the server."""
@@ -103,13 +106,37 @@ class ServiceHandler(SimpleHTTPRequestHandler):
             print("\x1b[1m[\x1b[31mERROR\x1b[39m]\x1b[0m", " ".join(args))
             # return super().log_error(format, *args)
 
-    def log_message(self, format: str, *args: Any) -> None:
+    def get_time(self):
+        _, _, _, hh, mm, ss, _, _, _ = time.localtime(time.time())
+        return "%02d:%02d:%02d" % (hh, mm, ss)
+
+    def log_message(self, message: str, *args) -> None:
         if self.server.logging:
-            return super().log_message(format, *args)
+            if len(args) > 0:
+                message = message % args
+
+            sys.stderr.write(f"[{self.get_time()}] {message}\n")
+
+    def format_code(self, code: str|int) -> str:
+        code = int(code)
+        if code >= 100 and code <= 199:
+            return f"\x1b[34m{code}\x1b[39m"
+        if code >= 200 and code <= 299:
+            return f"\x1b[32m{code}\x1b[39m"
+        if code >= 300 and code <= 399:
+            return f"\x1b[35m{code}\x1b[39m"
+        if code >= 400 and code <= 499:
+            return f"\x1b[31m{code}\x1b[39m"
+        if code >= 500 and code <= 599:
+            return f"\x1b[33m{code}\x1b[39m"
+        return str(code)
 
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
         if "/livereload/" not in self.requestline and self.server.logging:
-            return super().log_request(code, size)
+            if isinstance(code, HTTPStatus):
+                code = code.value
+            r_type, r_path = self.requestline.split()[:2]
+            self.log_message(f'({self.format_code(code)}) {r_type} {r_path!r}')
 
     def send_head(self, live_reload: str, request_path: str) -> io.BytesIO | BinaryIO | None:
         path = self.translate_path(self.path)
@@ -169,36 +196,43 @@ class ServiceHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         live_reload = match(r"/?livereload/(?P<path>.*)", self.path)
-        if live_reload is not None:
-            file_path = translate_path(self.server.root, live_reload.group("path"))
-            self.send_response(200)
-            self.end_headers()
+        try:
+            if live_reload is not None:
+                file_path = translate_path(self.server.root, live_reload.group("path"))
+                self.send_response(200)
+                self.end_headers()
 
-            code = 0
-            try:
-                while self.server.reloads.qsize() != 0:
-                    reload = self.server.reloads.get(timeout=5)
-                    if match(f"^{reload.regex()}$", file_path) is not None:
-                        code = 1
-                    self.server.reloads.task_done()
-            except Exception:
-                pass
-            self.wfile.write(bytes(f"{code}", "utf-8"))
-        else:
-            # Same as super().do_GET() except a live reload script is injected
-            request_path = str(self.path)
-            self.path = ServerPath(self.server.root, self.path).posix()
-            live_reload = self.lr_script()
-            file = self.send_head(live_reload, request_path)
-            if file:
-                try: 
-                    if self.path.endswith((".html", ".htm")) or not ServerPath(self.path).lstrip().isfile():
-                        data = file.read() + bytes(live_reload, "utf-8")
-                        self.wfile.write(data)
-                    else:
-                        self.copyfile(file, self.wfile)
-                finally:
-                   file.close()
+                code = 0
+                try:
+                    while self.server.reloads.qsize() != 0:
+                        reload = self.server.reloads.get(timeout=5)
+                        if match(f"^{reload.regex()}$", file_path) is not None:
+                            code = 1
+                        self.server.reloads.task_done()
+                except Exception:
+                    pass
+                self.wfile.write(bytes(f"{code}", "utf-8"))
+            else:
+                # Same as super().do_GET() except a live reload script is injected
+                request_path = str(self.path)
+                self.path = ServerPath(self.server.root, self.path).posix()
+                live_reload = self.lr_script()
+                file = self.send_head(live_reload, request_path)
+                if file:
+                    try:
+                        if (
+                            self.path.endswith((".html", ".htm"))
+                            or not ServerPath(self.path).lstrip().isfile()
+                        ):
+                            data = file.read() + bytes(live_reload, "utf-8")
+                            self.wfile.write(data)
+                        else:
+                            self.copyfile(file, self.wfile)
+                    finally:
+                        file.close()
+        except Exception as exc:
+            print_exc()
+            print("\x1b[1m[\x1b[31mERROR\x1b[39m]\x1b[0m", exc)
 
 
 class Server(ThreadingHTTPServer):
@@ -208,12 +242,11 @@ class Server(ThreadingHTTPServer):
         self,
         reloads: Queue[ServerPath],
         root: str,
-        base: str,
+        errors: str,
         *,
         host: str = "localhost",
         port=PORT_RANGE[0],
     ):
-
         super().__init__((host, port), ServiceHandler)
         self.host = host
         self.port = port
@@ -221,7 +254,7 @@ class Server(ThreadingHTTPServer):
         self.full_url = f"http://{host}:{port}/"
         self.reloads = reloads
         self.root = root
-        self.epath = base
+        self.epath = errors
         self.logging = True
 
     def serve_forever(self, poll_interval: float = 0.5) -> None:

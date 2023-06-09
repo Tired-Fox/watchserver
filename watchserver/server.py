@@ -103,7 +103,7 @@ class ServiceHandler(SimpleHTTPRequestHandler):
 
     def log_error(self, format: str, *args: Any) -> None:
         if self.server.logging:
-            print("\x1b[1m[\x1b[31mERROR\x1b[39m]\x1b[0m", " ".join(args))
+            print("\x1b[1m[\x1b[31mERROR\x1b[39m]\x1b[0m", " ".join(str(arg) for arg in args))
             # return super().log_error(format, *args)
 
     def get_time(self):

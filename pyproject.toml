@@ -4,18 +4,28 @@ build-backend = "hatchling.build"
 
 [project]
 name = "watchserver"
-version = "0.1.9"
+version = "0.1.10"
 authors = [
-    { name="Tired Fox", email="zboehm104@gmail.com"}
+  { name="Tired Fox", email="zboehm104@gmail.com"}
 ]
 description="Python live reload server"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.7"
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest"
+]
+dev = [
+  "pylint",
+  "black",
+  "isort"
 ]
 
 [project.scripts]

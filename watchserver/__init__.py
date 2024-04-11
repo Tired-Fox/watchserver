@@ -1,7 +1,6 @@
 from threading import Timer
-
 __all__ = [
-    "debounce"
+    "debounce",
 ]
 
 

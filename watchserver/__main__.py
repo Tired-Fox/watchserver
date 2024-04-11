@@ -23,7 +23,7 @@ _path_ = Path(getcwd()).joinpath("static")
 INJECT = """
 <meta name="_LIVE_RELOAD_PATH_" content="{path}" />
 <script id="_LIVE_RELOAD_SCRIPT_">
-    const socket = new WebSocket("ws://localhost:8080/ws/_live_refresh_");
+    const socket = new WebSocket("ws://{host}{port}/ws/_live_refresh_");
     const parser = new DOMParser();
     const reloadMeta = document.querySelector("meta[name=_LIVE_RELOAD_PATH_]")?.cloneNode();
     const reloadScript = document.getElementById("_LIVE_RELOAD_SCRIPT_")?.cloneNode(true);
@@ -191,6 +191,7 @@ class WatchServer:
     def __init__(
         self,
         root: str = ".",
+        port: int = None,
         sep: str = ":",
         expose: bool = False,
         ssl: ssl.SSLContext | None = None,
@@ -202,6 +203,7 @@ class WatchServer:
         self.sep = sep
         self.expose = expose
         self.ssl = ssl
+        self.port = port or 8080
 
         sh = logging.StreamHandler()
         sh.setLevel(logging.INFO)
@@ -229,7 +231,7 @@ class WatchServer:
         web.run_app(
             app,
             host="0.0.0.0" if self.expose else "127.0.0.1",
-            ssl_context=self.ssl,
+            port=self.port,
             access_log_class=ServerLogger,
             access_log=self.logger,
             access_log_format=self.sep,
@@ -252,7 +254,13 @@ class WatchServer:
                         start = match.start()
                         data = bytes(
                             data[0 : match.start()]
-                            + (INJECT.format(path=filename))
+                            + (
+                                INJECT.format(
+                                    path=filename,
+                                    host="localhost",
+                                    port=f":{self.port}",
+                                )
+                            )
                             + data[start:],
                             encoding="utf-8",
                         )
@@ -260,13 +268,19 @@ class WatchServer:
                         end = match.end()
                         data = bytes(
                             data[0:end]
-                            + f"<head>{INJECT.format(path=filename)}</head>"
+                            + f"<head>{INJECT.format(path=filename, host="localhost", port=f":{self.port}")}</head>"
                             + data[end:],
                             encoding="utf-8",
                         )
                     else:
                         data = bytes(
-                            data + INJECT.format(filename=filename), encoding="utf-8"
+                            data
+                            + INJECT.format(
+                                filename=filename,
+                                host="localhost",
+                                port=f":{self.port}",
+                            ),
+                            encoding="utf-8",
                         )
             else:
                 with path.open("rb") as file:
@@ -274,7 +288,7 @@ class WatchServer:
             return data
         return None
 
-    async def ws_refresh(self, request):
+    async def ws_refresh(self, request: web.Request):
         """Setup a websocket connection with a page and send update messages
         when a file is updated. The message will include/allow for the update
         of the inner data of the DOM.
@@ -356,10 +370,13 @@ class WatchServer:
     default=False,
     help="Expose the server to the local network",
 )
-def main(
-    root: str = ".",
-    expose: bool = False,
-):
+@click.option(
+    "-p",
+    "--port",
+    type=int,
+    help="Define what port the server should host on",
+)
+def main(root: str = ".", expose: bool = False, port: int = None):
     """Opinionated live reload server written in python using WebSockets
 
     \x1b[1;36mNOTE\x1b[0m
@@ -375,7 +392,7 @@ def main(
     in production.
     """
 
-    WatchServer(root or ".", expose=expose).run()
+    WatchServer(root, port, expose=expose).run()
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ import ssl
 from aiohttp import web, WSMsgType
 import click
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileSystemEvent
+from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 
 import watchserver as ws
 
@@ -24,10 +24,9 @@ INJECT = """
 <meta name="_LIVE_RELOAD_PATH_" content="{path}" />
 <script id="_LIVE_RELOAD_SCRIPT_">
     const socket = new WebSocket("ws://{host}{port}/ws/_live_refresh_");
-    const parser = new DOMParser();
     const reloadMeta = document.querySelector("meta[name=_LIVE_RELOAD_PATH_]")?.cloneNode();
     const reloadScript = document.getElementById("_LIVE_RELOAD_SCRIPT_")?.cloneNode(true);
-    const reloadPath = reloadMeta?.content;
+    var reloadPath = reloadMeta?.content;
     socket.addEventListener("open", () => socket.send(JSON.stringify({{ type: "open", message: reloadPath }})));
 
     socket.addEventListener("message", (event) => {{
@@ -46,11 +45,20 @@ INJECT = """
                     );
                 }}
                 break;
+            case "moved":
+                const info = data.message;
+                console.warn(`[Live Reload] File renamed from ${{info.src}} to ${{info.dest}}`);
+                if (info.src == reloadPath) {{
+                    // Now update the paths in meta tag and script
+                    reloadPath = info.dest;
+                    reloadMeta.content = info.dest;
+                    window.history.replaceState({{}}, `Moved to ${{info.dest}}`, `/${{info.dest}}`);
+                }}
+                break;
             case "dom":
                 console.warn(`[Live Reload] Updating DOM`);
                 const html = document.getElementsByTagName("html")[0];
                 html.innerHTML = data.message;
-                document.head.append(reloadMeta, reloadScript);
                 break;
             default:
         }}
@@ -108,7 +116,7 @@ class ServerLogger(web.AbstractAccessLogger):
         )
 
 
-class RefreshEventHandler(FileSystemEventHandler):
+class RefreshEventHandler(PatternMatchingEventHandler):
     """Logs all the events captured."""
 
     listeners: list[web.WebSocketResponse]
@@ -117,11 +125,11 @@ class RefreshEventHandler(FileSystemEventHandler):
     event_loop: Optional[asyncio.AbstractEventLoop]
     """Async event loop/runtime"""
 
-    def __init__(self, root: str, sep: str = ":") -> None:
-        super().__init__()
+    def __init__(self, *, root: str, sep: str = ":", **kwargs) -> None:
+        super().__init__(**kwargs)
         self.listeners = []
         self.root = root.replace("\\", "/")
-        self.logger = logging.Logger("WBSK")
+        self.logger = logging.Logger("WS")
         self.sep = sep
 
         sh = logging.StreamHandler()
@@ -155,6 +163,10 @@ class RefreshEventHandler(FileSystemEventHandler):
         This will tell the browser to change the location and
         to change the id of the file it is referencing
         """
+
+        src = src.replace("\\", "/").lstrip(self.root.rstrip("/")).lstrip("/")
+        dest = dest.replace("\\", "/").lstrip(self.root.rstrip("/")).lstrip("/")
+
         self.logger.info(
             "\x1b[1m Move \x1b[22m %s %s to %s", self.sep, repr(src), repr(dest)
         )
@@ -175,10 +187,6 @@ class RefreshEventHandler(FileSystemEventHandler):
         self.moved(event.src_path, event.dest_path)
 
     @ws.debounce(0.02)
-    def on_deleted(self, event: FileSystemEvent) -> None:
-        self.update(event.src_path)
-
-    @ws.debounce(0.02)
     def on_modified(self, event: FileSystemEvent) -> None:
         self.update(event.src_path)
 
@@ -197,7 +205,7 @@ class WatchServer:
         ssl: ssl.SSLContext | None = None,
     ) -> None:
         self.root = root.replace("\\", "/")
-        self.event_handler = RefreshEventHandler(root=root)
+        self.event_handler = RefreshEventHandler(root=root, patterns=["**/*.html"])
         self.observer = Observer()
         self.logger = logging.Logger("HTTP")
         self.sep = sep
@@ -320,9 +328,8 @@ class WatchServer:
                 elif mtype == "open":
                     await ws.send_json({"type": "connected"})
                 elif mtype == "fetch":
-                    await ws.send_json(
-                        {"type": "dom", "message": self.load_file(message).decode()}
-                    )
+                    if (file := self.load_file(message)) is not None:
+                        await ws.send_json({"type": "dom", "message": file.decode()})
             elif msg.type == WSMsgType.CLOSE:
                 await ws.close()
             elif msg.type == WSMsgType.ERROR:
@@ -376,7 +383,7 @@ class WatchServer:
     type=int,
     help="Define what port the server should host on",
 )
-def main(root: str = ".", expose: bool = False, port: int = None):
+def main(root: str, expose: bool = False, port: int = None):
     """Opinionated live reload server written in python using WebSockets
 
     \x1b[1;36mNOTE\x1b[0m
@@ -392,7 +399,7 @@ def main(root: str = ".", expose: bool = False, port: int = None):
     in production.
     """
 
-    WatchServer(root, port, expose=expose).run()
+    WatchServer(root or ".", port, expose=expose).run()
 
 
 if __name__ == "__main__":

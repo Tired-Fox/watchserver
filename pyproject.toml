@@ -17,6 +17,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
+dependencies = ["aiohttp", "click", "watchdog", "certifi"]
 
 [project.optional-dependencies]
 test = [
@@ -29,8 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-watchserver = "watchserver.__main__:serve"
-# moph = "mophidian.__main__:cli"
+watchserver = "watchserver.__main__:main"
 
 [project.urls]
 "Homepage" = "https://github.com/Tired-Fox/watchserver"

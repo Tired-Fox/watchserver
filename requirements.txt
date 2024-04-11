@@ -1,2 +1,4 @@
 click
 watchdog
+aiohttp
+certifi

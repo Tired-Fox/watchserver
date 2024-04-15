@@ -8,6 +8,7 @@ from os import getcwd
 from pathlib import Path
 import re
 import ssl
+import webbrowser
 
 from aiohttp import web, WSMsgType
 import click
@@ -203,6 +204,7 @@ class WatchServer:
         sep: str = ":",
         expose: bool = False,
         ssl: ssl.SSLContext | None = None,
+        open: bool = False,
     ) -> None:
         self.root = root.replace("\\", "/")
         self.event_handler = RefreshEventHandler(root=root, patterns=["**/*.html"])
@@ -212,6 +214,7 @@ class WatchServer:
         self.expose = expose
         self.ssl = ssl
         self.port = port or 8080
+        self.open = open
 
         sh = logging.StreamHandler()
         sh.setLevel(logging.INFO)
@@ -236,6 +239,13 @@ class WatchServer:
                 web.route("*", "/{path:.+}", self.static_files),
             ]
         )
+
+        if self.open:
+            webbrowser.open(
+                f"http://{'127.0.0.1'}:{self.port}",
+                new=2,
+                autoraise=True,
+            )
         web.run_app(
             app,
             host="0.0.0.0" if self.expose else "127.0.0.1",
@@ -383,7 +393,18 @@ class WatchServer:
     type=int,
     help="Define what port the server should host on",
 )
-def main(root: str, expose: bool = False, port: int = None):
+@click.option(
+    "-o",
+    "--open",
+    is_flag=True,
+    help="Open webbrowser to hosted url",
+)
+def main(
+    root: str,
+    expose: bool = False,
+    port: int = None,
+    open: bool = False,
+):
     """Opinionated live reload server written in python using WebSockets
 
     \x1b[1;36mNOTE\x1b[0m
@@ -399,7 +420,7 @@ def main(root: str, expose: bool = False, port: int = None):
     in production.
     """
 
-    WatchServer(root or ".", port, expose=expose).run()
+    WatchServer(root or ".", port, expose=expose, open=open).run()
 
 
 if __name__ == "__main__":

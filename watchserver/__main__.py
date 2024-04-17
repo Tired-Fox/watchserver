@@ -67,6 +67,29 @@ INJECT = """
 </script>
 """
 
+SEP = ":"
+ws_logger = logging.Logger("WS")
+sh = logging.StreamHandler()
+sh.setLevel(logging.INFO)
+sh.setFormatter(
+    logging.Formatter(
+        f"[\x1b[33m%(name)s\x1b[39m] %(asctime)s {SEP} %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
+ws_logger.addHandler(sh)
+
+http_logger = logging.Logger("HTTP")
+sh = logging.StreamHandler()
+sh.setLevel(logging.INFO)
+sh.setFormatter(
+    logging.Formatter(
+        f"[\x1b[33m%(name)s\x1b[39m] %(asctime)s {SEP} %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
+http_logger.addHandler(sh)
+
 
 class ServerLogger(web.AbstractAccessLogger):
     """Abstract writer to access log."""
@@ -102,10 +125,13 @@ class ServerLogger(web.AbstractAccessLogger):
         return "49"
 
     def log(
-        self, request: web.BaseRequest, response: web.StreamResponse, time: float
+        self,
+        request: web.BaseRequest,
+        response: web.StreamResponse,
+        time: float,
     ) -> None:
         """Emit log to logger."""
-        self.logger.info(
+        http_logger.info(
             "\x1b[1;%s;37m%s\x1b[22;39;49m %s \x1b[%sm%s\x1b[39m %s %s",
             ServerLogger.method(request.method),
             request.method.center(6),
@@ -126,27 +152,15 @@ class RefreshEventHandler(PatternMatchingEventHandler):
     event_loop: Optional[asyncio.AbstractEventLoop]
     """Async event loop/runtime"""
 
-    def __init__(self, *, root: str, sep: str = ":", **kwargs) -> None:
+    def __init__(self, *, root: str, **kwargs) -> None:
         super().__init__(**kwargs)
         self.listeners = []
         self.root = root.replace("\\", "/")
-        self.logger = logging.Logger("WS")
-        self.sep = sep
-
-        sh = logging.StreamHandler()
-        sh.setLevel(logging.INFO)
-        sh.setFormatter(
-            logging.Formatter(
-                f"[\x1b[33m%(name)s\x1b[39m] %(asctime)s {self.sep} %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-        )
-        self.logger.addHandler(sh)
 
     def update(self, file: str):
         """Send a update message to all websocket listeners"""
         file = file.replace("\\", "/").lstrip(self.root.rstrip("/")).lstrip("/")
-        self.logger.info("\x1b[1mUpdate\x1b[22m %s %s", self.sep, repr(file))
+        ws_logger.info("\x1b[1mUpdate\x1b[22m %s %s", SEP, repr(file))
         with asyncio.Runner() as runner:
             for listener in self.listeners:
                 runner.run(
@@ -168,9 +182,7 @@ class RefreshEventHandler(PatternMatchingEventHandler):
         src = src.replace("\\", "/").lstrip(self.root.rstrip("/")).lstrip("/")
         dest = dest.replace("\\", "/").lstrip(self.root.rstrip("/")).lstrip("/")
 
-        self.logger.info(
-            "\x1b[1m Move \x1b[22m %s %s to %s", self.sep, repr(src), repr(dest)
-        )
+        ws_logger.info("\x1b[1m Move \x1b[22m %s %s to %s", SEP, repr(src), repr(dest))
 
         with asyncio.Runner() as runner:
             for listener in self.listeners:
@@ -201,30 +213,24 @@ class WatchServer:
         self,
         root: str = ".",
         port: int = None,
-        sep: str = ":",
         expose: bool = False,
         ssl: ssl.SSLContext | None = None,
         open: bool = False,
+        host: str = None
     ) -> None:
         self.root = root.replace("\\", "/")
-        self.event_handler = RefreshEventHandler(root=root, patterns=[f"{self.root}/**/*.html", f"{self.root}/*.html"])
+        self.event_handler = RefreshEventHandler(
+            root=root, patterns=[f"{self.root}/**/*.html", f"{self.root}/*.html"]
+        )
         self.observer = Observer()
-        self.logger = logging.Logger("HTTP")
-        self.sep = sep
         self.expose = expose
         self.ssl = ssl
         self.port = port or 8080
         self.open = open
-
-        sh = logging.StreamHandler()
-        sh.setLevel(logging.INFO)
-        sh.setFormatter(
-            logging.Formatter(
-                f"[\x1b[33m%(name)s\x1b[39m] %(asctime)s {self.sep} %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-        )
-        self.logger.addHandler(sh)
+        self.host = "127.0.0.1"
+        if self.expose:
+            import socket
+            self.host = host or socket.gethostbyname(socket.gethostname())
 
     def run(self):
         """Run the live reload file watching http server"""
@@ -242,17 +248,17 @@ class WatchServer:
 
         if self.open:
             webbrowser.open(
-                f"http://{'127.0.0.1'}:{self.port}",
+                f"http://{self.host}:{self.port}",
                 new=2,
                 autoraise=True,
             )
         web.run_app(
             app,
-            host="0.0.0.0" if self.expose else "127.0.0.1",
+            host=self.host,
             port=self.port,
             access_log_class=ServerLogger,
-            access_log=self.logger,
-            access_log_format=self.sep,
+            access_log=http_logger,
+            access_log_format=SEP,
         )
 
         self.observer.stop()
@@ -275,7 +281,7 @@ class WatchServer:
                             + (
                                 INJECT.format(
                                     path=filename,
-                                    host="localhost",
+                                    host=self.host,
                                     port=f":{self.port}",
                                 )
                             )
@@ -286,7 +292,7 @@ class WatchServer:
                         end = match.end()
                         data = bytes(
                             data[0:end]
-                            + f"<head>{INJECT.format(path=filename, host="localhost", port=f":{self.port}")}</head>"
+                            + f"<head>{INJECT.format(path=filename, host=self.host, port=f":{self.port}")}</head>"
                             + data[end:],
                             encoding="utf-8",
                         )
@@ -295,7 +301,7 @@ class WatchServer:
                             data
                             + INJECT.format(
                                 filename=filename,
-                                host="localhost",
+                                host=self.host,
                                 port=f":{self.port}",
                             ),
                             encoding="utf-8",
@@ -315,6 +321,7 @@ class WatchServer:
         await ws.prepare(request)
 
         self.event_handler.listeners.append(ws)
+        ws_logger.info("New Connection")
 
         async for msg in ws:
             # ws.__next__() automatically terminates the loop
@@ -343,10 +350,11 @@ class WatchServer:
             elif msg.type == WSMsgType.CLOSE:
                 await ws.close()
             elif msg.type == WSMsgType.ERROR:
-                self.logger.error(
+                ws_logger.error(
                     f"ws connection closed with exception {ws.exception()}"
                 )
 
+        ws_logger.info("Closed Connection")
         self.event_handler.listeners.remove(ws)
         return ws
 
@@ -388,6 +396,12 @@ class WatchServer:
     help="Expose the server to the local network",
 )
 @click.option(
+    "-h",
+    "--host",
+    default=None,
+    help="When expose is set, this is the host instead of the current IP"
+)
+@click.option(
     "-p",
     "--port",
     type=int,
@@ -403,6 +417,7 @@ def main(
     root: str,
     expose: bool = False,
     port: int = None,
+    host: str = None,
     open: bool = False,
 ):
     """Opinionated live reload server written in python using WebSockets
@@ -420,7 +435,7 @@ def main(
     in production.
     """
 
-    WatchServer(root or ".", port, expose=expose, open=open).run()
+    WatchServer(root or ".", port, expose=expose, open=open, host=host).run()
 
 
 if __name__ == "__main__":

@@ -61,6 +61,9 @@ INJECT = """
                 const html = document.getElementsByTagName("html")[0];
                 html.innerHTML = data.message;
                 break;
+            case "closed":
+                console.error(data.message);
+                alert(data.message);
             default:
         }}
     }});
@@ -216,7 +219,7 @@ class WatchServer:
         expose: bool = False,
         ssl: ssl.SSLContext | None = None,
         open: bool = False,
-        host: str = None
+        host: str = None,
     ) -> None:
         self.root = root.replace("\\", "/")
         self.event_handler = RefreshEventHandler(
@@ -230,6 +233,7 @@ class WatchServer:
         self.host = "127.0.0.1"
         if self.expose:
             import socket
+
             self.host = host or socket.gethostbyname(socket.gethostname())
 
     def run(self):
@@ -252,17 +256,32 @@ class WatchServer:
                 new=2,
                 autoraise=True,
             )
-        web.run_app(
-            app,
-            host=self.host,
-            port=self.port,
-            access_log_class=ServerLogger,
-            access_log=http_logger,
-            access_log_format=SEP,
-        )
 
-        self.observer.stop()
-        self.observer.join()
+        try:
+            web.run_app(
+                app,
+                host=self.host,
+                port=self.port,
+                access_log_class=ServerLogger,
+                access_log=http_logger,
+                access_log_format=SEP,
+            )
+
+            self.observer.stop()
+            self.observer.join()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            with asyncio.Runner() as runner:
+                for listener in self.event_handler.listeners:
+                    runner.run(
+                        listener.send_json(
+                            {
+                                "type": "closed",
+                                "message": "Connection lost\n\nRefresh the page to reconnect",
+                            }
+                        )
+                    )
 
     def load_file(self, filename: str) -> bytes | None:
         filename = filename.replace("\\", "/")
@@ -350,9 +369,7 @@ class WatchServer:
             elif msg.type == WSMsgType.CLOSE:
                 await ws.close()
             elif msg.type == WSMsgType.ERROR:
-                ws_logger.error(
-                    f"ws connection closed with exception {ws.exception()}"
-                )
+                ws_logger.error(f"ws connection closed with exception {ws.exception()}")
 
         ws_logger.info("Closed Connection")
         self.event_handler.listeners.remove(ws)
@@ -399,7 +416,7 @@ class WatchServer:
     "-h",
     "--host",
     default=None,
-    help="When expose is set, this is the host instead of the current IP"
+    help="When expose is set, this is the host instead of the current IP",
 )
 @click.option(
     "-p",

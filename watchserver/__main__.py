@@ -207,7 +207,7 @@ class WatchServer:
         open: bool = False,
     ) -> None:
         self.root = root.replace("\\", "/")
-        self.event_handler = RefreshEventHandler(root=root, patterns=["**/*.html"])
+        self.event_handler = RefreshEventHandler(root=root, patterns=[f"{self.root}/**/*.html", f"{self.root}/*.html"])
         self.observer = Observer()
         self.logger = logging.Logger("HTTP")
         self.sep = sep

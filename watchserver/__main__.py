@@ -24,12 +24,12 @@ _path_ = Path(getcwd()).joinpath("static")
 INJECT = """
 <meta name="_LIVE_RELOAD_PATH_" content="{path}" />
 <script id="_LIVE_RELOAD_SCRIPT_">
-    const socket = new WebSocket("ws://{host}{port}/ws/_live_refresh_");
+    const socket = new WebSocket(`ws://${{window.location.host}}/ws/_live_refresh_`);
     const reloadMeta = document.querySelector("meta[name=_LIVE_RELOAD_PATH_]")?.cloneNode();
     const reloadScript = document.getElementById("_LIVE_RELOAD_SCRIPT_")?.cloneNode(true);
     var reloadPath = reloadMeta?.content;
     socket.addEventListener("open", () => socket.send(JSON.stringify({{ type: "open", message: reloadPath }})));
-
+    socket.addEventListener("close", () => socket.close());
     socket.addEventListener("message", (event) => {{
         const data = JSON.parse(event.data);
         switch (data.type) {{
@@ -63,7 +63,7 @@ INJECT = """
                 break;
             case "closed":
                 console.error(data.message);
-                alert(data.message);
+                socket.close();
             default:
         }}
     }});
@@ -273,17 +273,23 @@ class WatchServer:
             pass
         finally:
             with asyncio.Runner() as runner:
-                for listener in self.event_handler.listeners:
-                    runner.run(
-                        listener.send_json(
-                            {
-                                "type": "closed",
-                                "message": "Connection lost\n\nRefresh the page to reconnect",
-                            }
-                        )
+                runner.run(self.close_all())
+
+    async def close_all(self):
+        """Close all websocket connections"""
+        async with asyncio.TaskGroup() as tg:
+            for listener in self.event_handler.listeners:
+                tg.create_task(
+                    listener.send_json(
+                        {
+                            "type": "closed",
+                            "message": "[LiveReload] Connection lost",
+                        }
                     )
+                )
 
     def load_file(self, filename: str) -> bytes | None:
+        """Load a system file and inject live reload script if it is html"""
         filename = filename.replace("\\", "/")
 
         path = Path(self.root).joinpath(filename)
@@ -297,13 +303,7 @@ class WatchServer:
                         start = match.start()
                         data = bytes(
                             data[0 : match.start()]
-                            + (
-                                INJECT.format(
-                                    path=filename,
-                                    host=self.host,
-                                    port=f":{self.port}",
-                                )
-                            )
+                            + (INJECT.format(path=filename))
                             + data[start:],
                             encoding="utf-8",
                         )
@@ -311,18 +311,13 @@ class WatchServer:
                         end = match.end()
                         data = bytes(
                             data[0:end]
-                            + f"<head>{INJECT.format(path=filename, host=self.host, port=f":{self.port}")}</head>"
+                            + f"<head>{INJECT.format(path=filename)}</head>"
                             + data[end:],
                             encoding="utf-8",
                         )
                     else:
                         data = bytes(
-                            data
-                            + INJECT.format(
-                                filename=filename,
-                                host=self.host,
-                                port=f":{self.port}",
-                            ),
+                            data + INJECT.format(filename=filename),
                             encoding="utf-8",
                         )
             else:
@@ -336,11 +331,11 @@ class WatchServer:
         when a file is updated. The message will include/allow for the update
         of the inner data of the DOM.
         """
+
         ws = web.WebSocketResponse()
         await ws.prepare(request)
 
         self.event_handler.listeners.append(ws)
-        ws_logger.info("New Connection")
 
         async for msg in ws:
             # ws.__next__() automatically terminates the loop
